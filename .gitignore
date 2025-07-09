@@ -1,5 +1,5 @@
-data/cow_data.zip
+AOD_acccelerometer_data/
 __pycache__/
 *.pyc
 results/
-
+.venv
