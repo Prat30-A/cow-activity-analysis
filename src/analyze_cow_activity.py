@@ -1,11 +1,15 @@
 import os
 import pandas as pd
+import pdfplumber 
+import datetime
 
 #get the path of the data folder on any computer
 data_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
 
 #Create an empty list to store full paths of all CSV files found
 csvFiles = []
+#create an empty list to store pdf files
+pdfFiles = []
 #Walk through all directories and subdirectories starting from 'data_root'
 for path, subdirs, files in os.walk(data_root):
     #Loop through all files in the current directory
@@ -14,8 +18,44 @@ for path, subdirs, files in os.walk(data_root):
         if x.endswith(".csv") == True:
             #Construct the full file path and add it to the list
             csvFiles.append(os.path.join(path, x))
+        if x.endswith(".pdf") == True:
+            pdfFiles.append(os.path.join(path, x))
 
+pdfList = []
 
+for pdf_path in pdfFiles:
+    #get the last part of the file name
+    file_name = os.path.basename(pdf_path)       
+    #get the cow number and remove the .pdf       
+    cow_id = os.path.splitext(file_name)[0]           
+  
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            #get all the text in the page
+            text = page.extract_text()
+            #split the page into lines
+            lines = text.split('\n')
+            #Find where the table started
+            tableStart = False
+            for line in lines:
+                if 'Dscrp' in line and 'Date' in line:
+                    tableStart = True
+                    continue
+                #keep looping forward while tablestart is false
+                if not tableStart:
+                    continue
+                    
+                words = line.strip().split()
+                try:
+                    format = '%m/%d/%Y'
+                    pdfDict = {'animal_id':cow_id, 'date (UTC)':datetime.datetime.strptime(words[3],format).date(),'event':words[2]}
+                    pdfList.append(pdfDict)
+                #if date isnt formatted properly(error was encountered)
+                except ValueError:
+                    continue
+#create the df from the list 
+processedPdfDf = pd.DataFrame(pdfList)
+    
 #List to store processed summary data for each cow/day
 processedList = [] 
 
@@ -63,8 +103,11 @@ for csv in csvFiles:
         continue
 
 #create a datafram of the list
-processedDF = pd.DataFrame(processedList)
-#print(processedDF)
+processedCsvDf = pd.DataFrame(processedList)
+#convert each df to one data type
+processedCsvDf["animal_id"] = processedCsvDf["animal_id"].astype(str)
+processedPdfDf["animal_id"] = processedPdfDf["animal_id"].astype(str)
 
-num_unique_cows = processedDF['animal_id'].nunique()
-print(num_unique_cows)
+#merge both df in an outer join to include all the combined data and fill the rest with Nan
+merged_df = pd.merge(processedCsvDf,processedPdfDf, on=["animal_id", "date (UTC)"],how="outer")
+
