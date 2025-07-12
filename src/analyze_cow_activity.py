@@ -44,7 +44,8 @@ for pdf_path in pdfFiles:
                 #keep looping forward while tablestart is false
                 if not tableStart:
                     continue
-                    
+                
+                #break each line into words
                 words = line.strip().split()
                 try:
                     format = '%m/%d/%Y'
